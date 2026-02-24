@@ -398,4 +398,4 @@ if __name__ == "__main__":
         ckpt = {"model": state, "config": config}
         orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
         save_args = orbax_utils.save_args_from_target(ckpt)
-        orbax_checkpointer.save(os.path.join(os.getcwd(), args.layout, f"{args.output}"), ckpt, save_args=save_args)
+        orbax_checkpointer.save(os.path.join(os.getcwd(), "phase0" ,args.layout, f"{args.output}"), ckpt, save_args=save_args)
