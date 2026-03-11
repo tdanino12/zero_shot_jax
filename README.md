@@ -21,5 +21,5 @@ bash phase_1_training.py --seed=0 --layout=cramped_room
 Train a **the ego agent** .
 
 ```bash
-bash phase_2_training.py --seed=0 --layout=cramped_room
+bash phase2_training.py --seed=0 --layout=cramped_room
 ```
