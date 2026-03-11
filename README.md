@@ -13,7 +13,7 @@ python marl_self_phase_0.py --seed=0 --layout=cramped_room
 Train a **population** that will be used as training parntner to the ego agents.
 
 ```bash
-bash phase_1_training.py --seed=0 --layout=cramped_room
+bash run_phase1.sh
 ```
 
 ### Phase 2 — population Training
@@ -21,5 +21,5 @@ bash phase_1_training.py --seed=0 --layout=cramped_room
 Train a **the ego agent** .
 
 ```bash
-bash phase2_training.py --seed=0 --layout=cramped_room
+python phase2_training.py --seed=0 --layout=cramped_room
 ```
