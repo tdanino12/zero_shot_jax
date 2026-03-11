@@ -29,12 +29,12 @@ python phase2_training.py --seed=0 --layout=cramped_room
 
 ## ✨ Overcooked maps:
 
-🔁counter_circuit
+1. counter_circuit
 
-🔁cramped_room
+2. cramped_room
 
-🔁coord_ring
+3. coord_ring
 
-🔁forced_coord
+4. forced_coord
 
-🔁asymm_advantages 
+5. asymm_advantages 
