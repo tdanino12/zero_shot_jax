@@ -18,7 +18,7 @@ bash run_phase1.sh
 
 ### Phase 2 — population Training
 
-Train a **the ego agent** .
+Train **the ego agent** .
 
 ```bash
 python phase2_training.py --seed=0 --layout=cramped_room
