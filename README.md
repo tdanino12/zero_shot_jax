@@ -23,7 +23,9 @@ Train **the ego agent** .
 ```bash
 python phase2_training.py --seed=0 --layout=cramped_room
 ```
+-------------------------------------------
 
+## Running Baseline Methods 
 
 ---
 
