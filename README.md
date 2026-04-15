@@ -5,7 +5,7 @@
 Train a **base partner** with initial skills. This agent serves as the seed for each partner in the Phase 1 population.
 
 ```bash
-python marl_self_phase_0.py --seed=0 --layout=cramped_room
+python marl_self_video.py --seed=0 --layout=cramped_room
 ```
 
 ### Phase 1 — population Training
