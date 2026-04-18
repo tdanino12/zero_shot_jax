@@ -2,7 +2,7 @@
 
 ### Phase 0 — Base Partner Training
 
-Train a **base partner** with initial skills. This agent serves as the seed for each partner in the Phase 1 population.
+Train a **base partner** via self-play. This agent serves as the partner in the Phase 1 population of socializers.
 
 ```bash
 python marl_self_video.py --seed=0 --layout=cramped_room
