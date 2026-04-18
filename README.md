@@ -20,8 +20,8 @@ bash run_phase1.sh
 
 2. For non-symmetric layouts (e.g., forced_coord, asymm_advantages):
 ```bash
-bash run_phase1_opposite_agent0.sh
-bash run_phase1_opposite_agent1.sh
+bash run_phase1_opposite_agent0.sh  # train first half of the agents, as agent 0
+bash run_phase1_opposite_agent1.sh  # train the second half of the agents, as agent 1
 ```
 
 ### Phase 2 — population Training
