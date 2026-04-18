@@ -12,13 +12,17 @@ python marl_self_video.py --seed=0 --layout=cramped_room
 
 Train a **population** that will be used to train the ego agents.
 
-1. For symmetric layouts (e.g., cramped_room, counter_circuit, coord_ring)
+1. For symmetric layouts (e.g., cramped_room, counter_circuit, coord_ring):
 
 ```bash
 bash run_phase1.sh
 ```
 
 2. For non-symmetric layouts (e.g., forced_coord, asymm_advantages):
+```bash
+bash run_phase1_opposite_agent0.sh
+bash run_phase1_opposite_agent1.sh
+```
 
 ### Phase 2 — population Training
 
