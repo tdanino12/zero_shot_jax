@@ -24,7 +24,7 @@ bash run_phase1_opposite_agent0.sh  # train first half of the agents, as agent 0
 bash run_phase1_opposite_agent1.sh  # train the second half of the agents, as agent 1
 ```
 
-### Phase 2 — population Training
+### Phase 2 — Training an Ego Agent
 
 Train **the ego agent** .
 
@@ -44,9 +44,10 @@ python baselines/MEP_all_phases.py
 
 2. For non-symmetric layouts (e.g., forced_coord, asymm_advantages):
 ```bash
-python baselines/MEP_all_phases_ego_opposite.py
+python baselines/phase_2_training_opposite_and_self_play.py
 ```
 
+### FCP
 
 ---
 
