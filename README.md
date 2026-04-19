@@ -35,6 +35,19 @@ python phase2_training.py --seed=0 --layout=cramped_room
 
 ## Running Baseline Methods 
 
+### MEP
+1. For symmetric layouts (e.g., cramped_room, counter_circuit, coord_ring):
+
+```bash
+python baselines/MEP_all_phases.py
+```
+
+2. For non-symmetric layouts (e.g., forced_coord, asymm_advantages):
+```bash
+python baselines/MEP_all_phases_ego_opposite.py
+```
+
+
 ---
 
 ## ✨ Overcooked maps:
