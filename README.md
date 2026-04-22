@@ -42,12 +42,12 @@ In MEP all training is condecuted by running a single file.
 1. For symmetric layouts (e.g., cramped_room, counter_circuit, coord_ring):
 
 ```bash
-python baselines/MEP_all_phases.py
+python baselines/MEP_all_phases.py --seed=0 --layout=cramped_room
 ```
 
 2. For non-symmetric layouts (e.g., forced_coord, asymm_advantages):
 ```bash
-python baselines/phase_2_training_opposite_and_self_play.py
+python baselines/phase_2_training_opposite_and_self_play.py --seed=0 --layout=cramped_room
 ```
 
 ### FCP
