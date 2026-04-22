@@ -1,4 +1,4 @@
-## 🧪 Training Phases (TEAM)
+## 🎯 Training Phases (TEAM)
 
 ### Phase 0 — Base Partner Training
 
@@ -35,7 +35,7 @@ python phase2_training.py --seed=0 --layout=cramped_room
 
 ## Running Baseline Methods 
 
-### 🧪 MEP
+### 🤖 MEP
 
 In MEP all training is condecuted by running a single file.
 
@@ -50,7 +50,7 @@ python baselines/MEP_all_phases.py --seed=0 --layout=cramped_room
 python baselines/phase_2_training_opposite_and_self_play.py --seed=0 --layout=cramped_room
 ```
 
-### 🧪 FCP
+### 🤖 FCP
 
 ### Phase 1 — population Training
 
