@@ -56,24 +56,26 @@ python baselines/phase_2_training_opposite_and_self_play.py --seed=0 --layout=cr
 
 Either run manually for all seeds (in FCP, you run each population agent with a different seed):
 
-``bash
+```bash
 python baselines/fcp_stage1.py --seed=0 --layout=cramped_room
 ```
 
 or use the bash file that iterates over all seeds:
-``bash
+
+```bash
 python baselines/run_phase1_fcp.sh --layout=cramped_room
 ```
 
 ### Phase 2 — Training an Ego Agent
 
-``bash
+```bash
 python baselines/phase_2_training_fcp.py --seed=0 --layout=cramped_room
 ```
 
----
+-------------------------------------------
 
-## ✨ Overcooked maps:
+
+### ✨ Overcooked maps:
 
 1. counter_circuit
 
