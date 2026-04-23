@@ -32,7 +32,7 @@ Train **the ego agent** .
 python phase2_training.py --seed=0 --layout=cramped_room
 ```
 
-To get all options (both achievers and different sizes of MOE, run
+To get all options (both types of achievers and different sizes of MOE) run
 The following bash with a specific layout and seed)
 
 ```bash
