@@ -8,7 +8,7 @@ Train a **base partner** via self-play. This agent serves as the partner in the 
 python marl_self_video.py --seed=0 --layout=cramped_room
 ```
 
-### Phase 1 — population Training
+### Phase 1 — Population Training
 
 Train a **population** that will be used to train the ego agents.
 
