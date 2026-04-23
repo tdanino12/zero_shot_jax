@@ -33,7 +33,7 @@ python phase2_training.py --seed=0 --layout=cramped_room
 ```
 
 To get all options (both types of achievers and different sizes of MOE) run
-the following bash with a specific layout and seed
+the following bash with a specific layout and seed (each run produces 5 variations):
 
 ```bash
 bash run_phase2.sh 0 cramped_room
