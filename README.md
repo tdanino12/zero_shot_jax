@@ -41,7 +41,7 @@ bash run_phase2.sh 0 cramped_room
 
 -------------------------------------------
 
-## Running Bat seline Methods 
+## Running Baseline Methods 
 
 ### 🤖 MEP
 
