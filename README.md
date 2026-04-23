@@ -31,9 +31,17 @@ Train **the ego agent** .
 ```bash
 python phase2_training.py --seed=0 --layout=cramped_room
 ```
+
+To get all options (both achievers and different sizes of MOE, run
+The following bash with a specific layout and seed)
+
+```bash
+bash run_phase2.sh 0 cramped_room
+```
+
 -------------------------------------------
 
-## Running Baseline Methods 
+## Running Bat seline Methods 
 
 ### 🤖 MEP
 
