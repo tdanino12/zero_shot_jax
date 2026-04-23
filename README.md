@@ -29,7 +29,7 @@ bash run_phase1_opposite_agent1.sh  # train the second half of the agents, as ag
 Train **the ego agent** .
 
 ```bash
-python phase2_training.py --seed=0 --layout=cramped_room
+python phase_2_training_opposite_and_self_play.py --seed=0 --layout=cramped_room
 ```
 
 To get all options (both types of achievers and different sizes of MOE) run
