@@ -132,7 +132,7 @@ class ActorCriticRNN(nn.Module):
     hidden_size: int = 128
     activation: str = "tanh"
     obs_shape: tuple = (7,7,26)
-
+    moe: int = 1
     @nn.compact
     def __call__(self, hidden, obs, dones):
         activation = nn.relu if self.activation == "relu" else nn.tanh
@@ -204,15 +204,15 @@ class ActorCriticRNN(nn.Module):
             chosen_expert = jnp.argmax(routing_weights, axis=-1)
 
             expert_outputs = []
-            for _ in range(3):
+            for _ in range(self.moe):
                 expert_out = nn.Dense(
                     self.hidden_size // 4,
                     kernel_init=orthogonal(jnp.sqrt(2)),
                     bias_init=constant(0.0)
                 )(actor_mean)
 
-            expert_out = jnp.tanh(expert_out) if self.activation == "tanh" else nn.relu(expert_out)
-            expert_outputs.append(expert_out)
+                expert_out = jnp.tanh(expert_out) if self.activation == "tanh" else nn.relu(expert_out)
+                expert_outputs.append(expert_out)
 
             expert_outputs = jnp.stack(expert_outputs, axis=-2)
             one_hot = jax.nn.one_hot(chosen_expert, num_classes=3)
@@ -299,7 +299,7 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     return {a: x[i] for i, a in enumerate(agent_list)}
 
 
-def load_population(population_dir, num_agents, layout):
+def load_population(population_dir, population_dir2, load_dir, num_agents, layout):
     """Load a list of pretrained partner params from orbax checkpoints."""
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     population_params = []
@@ -320,10 +320,23 @@ def load_population(population_dir, num_agents, layout):
             lambda x: x.squeeze(0) if x.ndim > 0 and x.shape[0] == 1 else x, params
         )
         population_params.append(params)
-
+    
+    
     for i in range(num_agents):
+
+        # Either load achiever LR or achiever-reward
+        if(load_dir =="phase1_r_achiever") and (layout == "forced_coord" or layout=="asymm_advantages") and (i in [11,17,2,3,7,8]):
+            # Reward based achiever
+            pop_dir = "/home/tom.danino/zero_shot_jax/phase1_r_achiever/" + layout
+        elif(load_dir =="phase1_r_achiever") and (i in [11,7,8]): # all other layouts
+            # Reward_based achiever
+            pop_dir = "/home/tom.danino/zero_shot_jax/phase1_r_achiever/" + layout
+        else:
+             # LR based achiever
+             pop_dir = "/home/tom.danino/zero_shot_jax/phase1_lr/" + layout
+
         for curr_stage in ["init", "mid", "final"]:
-            agent_path = os.path.join(population_dir, str(i), curr_stage, "empowerment")
+            agent_path = os.path.join(pop_dir, str(i), curr_stage, "empowerment")
             ckpt = orbax_checkpointer.restore(agent_path)
             try:
                 params = ckpt["model"]["params"]
@@ -375,7 +388,8 @@ def make_train(config, population_params):
             action_dim=env.action_space().n,
             hidden_size=config.get("hidden_size", 128),
             activation=config["activation"],
-            obs_shape=env.observation_space().shape
+            obs_shape=env.observation_space().shape,
+            moe = config["MOE"]
         )
 
         partner_network_mlp = ActorCritic(env.action_space().n, activation=config["activation"])
@@ -988,14 +1002,18 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--layout", type=str, default="cramped_room")
     parser.add_argument("--population_dir", type=str,
-                        default="/home/tom.danino/zero_shot_jax/phase_1/")
+                        default="/home/tom.danino/zero_shot_jax/phase1_lr/")
     parser.add_argument("--population_size", type=int, default=22)
     parser.add_argument("--updates_per_partner", type=int, default=15)
     parser.add_argument("--save", action="store_true", default=True)
+    
+    parser.add_argument("--load_dir", type=str, default="phase1_r_achiever")
+    parser.add_argument("--MOE", type=int, default=1)
+
     parser.add_argument("--no_wandb", action="store_true")
     args = parser.parse_args()
-    args.population_dir = args.population_dir + args.layout
-
+    args.population_dir = "/home/tom.danino/zero_shot_jax/phase1_lr/" + args.layout
+    population_dir2 = "/home/tom.danino/zero_shot_jax/phase1_r_achiever/" + args.layout
     os.environ["WANDB_API_KEY"] = "495b87eba3dbc88f719508680483181c811852ba"
     wandb.init(
         project="empowerment",
@@ -1012,6 +1030,8 @@ if __name__ == "__main__":
 
     population_params = load_population(
         config["population_dir"],
+        population_dir2,
+        config["load_dir"],
         config["population_size"],
         args.layout
     )
@@ -1096,13 +1116,16 @@ if __name__ == "__main__":
             final_reward = 0.0
 
         wandb.log({"evaluation/reward": final_reward})
-
+    if(args.load_dir == phase1_r_achiever):
+        save_type = "standrard"
+    else:
+        save_type = "LR"
     if args.save:
         ego_train_state = out["runner_state"][0]
         ckpt = {"params": jax.tree_map(lambda x: np.array(x), ego_train_state.params),
                 "config": config}
 
-        save_path = os.path.join(os.getcwd(), "phase2", args.layout, str(args.seed))
+        save_path = os.path.join(os.getcwd(), "phase2", args.layout, str(args.seed), save_type,"MOE_" + str(args.MOE))
         os.makedirs(save_path, exist_ok=True)
         file_path = os.path.join(save_path, f"{args.output}.pkl")
 
