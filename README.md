@@ -45,7 +45,7 @@ bash run_phase2.sh 0 cramped_room
 
 ### 🤖 MEP
 
-In MEP all training is condecuted by running a single file.
+In MEP all training is conducted by running a single file.
 
 1. For symmetric layouts (e.g., cramped_room, counter_circuit, coord_ring):
 
