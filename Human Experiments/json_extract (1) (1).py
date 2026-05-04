@@ -1,26 +1,30 @@
 """
-read_msgpack_debug.py
----------------------
-Reads counter_circuit debug files (MessagePack format, length-prefixed records)
-and displays them in human-readable form.
+plot_crossplay.py
+-----------------
+Reads all counter_circuit debug files (MessagePack, length-prefixed) found in
+the same directory, aggregates per-method rewards per layout across all
+participants, and produces a "Cross Play Performance" bar chart matching the
+style in the paper figure.
 
 Usage:
-    python read_msgpack_debug.py                        # full results report for each file
-    python read_msgpack_debug.py --summary              # compact per-record action table
-    python read_msgpack_debug.py --record 5             # pretty-print a specific record
-    python read_msgpack_debug.py --all                  # pretty-print every record
-    python read_msgpack_debug.py --file path/to/file    # specify a single file
+    python plot_crossplay.py                      # reads *.json in current dir
+    python plot_crossplay.py --dir /path/to/data  # reads *.json in given dir
+    python plot_crossplay.py --out figure.png     # custom output path
 
 Requirements:
-    pip install msgpack numpy
+    pip install msgpack numpy matplotlib
 """
 
 import struct
-import json
 import argparse
 import sys
 from pathlib import Path
 from collections import defaultdict
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 try:
     import msgpack
@@ -28,337 +32,354 @@ except ImportError:
     print("Install msgpack first:  pip install msgpack")
     sys.exit(1)
 
-try:
-    import numpy as np
-except ImportError:
-    print("Install numpy first:  pip install numpy")
-    sys.exit(1)
 
+# ── Configuration ────────────────────────────────────────────────────────────────
 
-# ── Default file paths ──────────────────────────────────────────────────────────
-DEFAULT_FILES = [ "user=1440183103_name=counter_circuit_debug=0.json", "user=2446854346_name=counter_circuit_debug=0.json", ]
+# Map raw name-prefix → display label.  Edit here to rename methods.
+METHOD_MAP = {
+    "my":          "Ours",
+    "sk_e3t":      "E3T",
+    "fcp":         "FCP",
+    "ik_finetune": "IK",
+    "mep":         "MEP",
+    "hsp":         "HSP",
+}
 
-SURVEY_QUESTIONS = [
-    "The agent adapted to me when making decisions.",
-    "The agent was consistent in its actions.",
-    "The agent's actions were human-like.",
-    "The agent frequently got in my way.",
-    "The agent's behavior was frustrating.",
-    "Overall, I enjoyed playing with the agent.",
-    "Overall, I felt that the agent's ability to coordinate with me was:",
-]
+# Bar colours in display order (same order as METHOD_MAP values)
+METHOD_COLORS = {
+    "Ours": "#4472C4",   # blue
+    "E3T":  "#ED7D31",   # orange
+    "FCP":  "#70AD47",   # green
+    "IK":   "#FF0000",   # red
+    "MEP":  "#9B59B6",   # purple (if present)
+    "HSP":  "#17A2B8",   # teal
+}
 
+# Map raw selected_layout prefix → display name (trailing _N stripped first)
+LAYOUT_MAP = {
+    "counter_circuit":  "Counter Circuit",
+    "cramped_room":     "Cramped Room",
+    "coord_ring":       "Coord Ring",
+    "forced_coord":     "Forced Coord",
+    "asymm_advantages": "Asymm Advantages",
+}
 
-# ── File loading ────────────────────────────────────────────────────────────────
+# Fixed display order for layouts (x-axis)
+LAYOUT_ORDER = list(LAYOUT_MAP.values())
 
-def load_records(path):
-    """
-    The files use MessagePack serialisation despite the .json extension.
-    Each record is prefixed with a 4-byte big-endian length:
-        [ uint32 length ][ msgpack bytes ] ...
-    """
+# ── File loading ─────────────────────────────────────────────────────────────────
+
+def load_records(path: Path):
+    """Load all MessagePack records from a length-prefixed binary file."""
     records = []
-    with open(path, "rb") as f:
-        raw = f.read()
-
+    raw = path.read_bytes()
     pos = 0
-    while pos < len(raw):
-        if pos + 4 > len(raw):
-            break
-        length = struct.unpack(">I", raw[pos : pos + 4])[0]
+    while pos + 4 <= len(raw):
+        length = struct.unpack(">I", raw[pos: pos + 4])[0]
         pos += 4
         if pos + length > len(raw):
-            print(f"  [WARNING] Truncated record at byte {pos}; stopping.")
             break
-        chunk = raw[pos : pos + length]
-        try:
-            obj = msgpack.unpackb(chunk, raw=False, strict_map_key=False)
-            records.append(obj)
-        except Exception as e:
-            print(f"  [WARNING] Could not decode record {len(records)}: {e}")
+        chunk = raw[pos: pos + length]
         pos += length
-
+        try:
+            records.append(msgpack.unpackb(chunk, raw=False, strict_map_key=False))
+        except Exception:
+            pass
     return records
 
 
-# ── JAX array decoding ──────────────────────────────────────────────────────────
+# ── JAX array decoding ────────────────────────────────────────────────────────────
 
-def decode_jax_ext(ext):
-    """
-    JAX arrays in the timestep blobs are stored as msgpack ExtType(code=1).
-    The ext payload is itself a msgpack list: [shape, dtype_str, raw_bytes].
-    """
+def _decode_ext(ext) -> float:
+    """Decode a JAX ExtType(code=1) scalar stored as [shape, dtype, bytes]."""
     inner = msgpack.unpackb(ext.data, raw=False, strict_map_key=False)
     shape, dtype_str, data = inner
     arr = np.frombuffer(data, dtype=np.dtype(dtype_str))
     return float(arr[0]) if arr.size == 1 else arr.tolist()
 
 
-def decode_timestep(ts_blob):
-    """Decode a timestep msgpack blob and return reward and step_type as Python scalars."""
+def decode_reward(value) -> float:
+    """Return reward as a Python float regardless of storage format."""
+    if hasattr(value, "data"):        # ExtType
+        return _decode_ext(value)
+    return float(value) if value is not None else 0.0
+
+
+def decode_timestep_reward(ts_blob: bytes) -> float:
+    """Unpack a timestep blob and return its reward."""
     ts = msgpack.unpackb(ts_blob, raw=False, strict_map_key=False)
-    result = {}
-    for key in ("reward", "step_type", "discount"):
-        val = ts.get(key)
-        if hasattr(val, "data"):          # ExtType
-            result[key] = decode_jax_ext(val)
-        else:
-            result[key] = val
-    return result
+    return decode_reward(ts.get("reward", 0.0))
 
 
-# ── Per-block aggregation ───────────────────────────────────────────────────────
+# ── Name parsing ──────────────────────────────────────────────────────────────────
 
-def aggregate_blocks(records):
+def parse_method(block_name: str) -> str | None:
     """
-    Walk all EnvStage records and accumulate reward + episode counts per block.
-    step_type: 0=FIRST, 1=MID, 2=LAST (episode terminal).
+    Extract method key from a block name like 'sk_e3t_counter_circuit2'.
+    Matches longest prefix in METHOD_MAP.
     """
-    blocks = defaultdict(lambda: {"rewards": [], "episodes": 0})
+    best = None
+    best_len = 0
+    for prefix in METHOD_MAP:
+        if block_name.startswith(prefix) and len(prefix) > best_len:
+            best = prefix
+            best_len = len(prefix)
+    return best
+
+
+def parse_layout(selected_layout: str) -> str | None:
+    """
+    Convert 'counter_circuit_9' → 'Counter Circuit' via LAYOUT_MAP.
+    Strips trailing _<digits> first.
+    """
+    # strip trailing _<digits>
+    parts = selected_layout.rsplit("_", 1)
+    key = parts[0] if len(parts) == 2 and parts[1].isdigit() else selected_layout
+    return LAYOUT_MAP.get(key)
+
+
+# ── Per-file extraction ───────────────────────────────────────────────────────────
+
+def extract_session(records: list, source_path: Path | None = None) -> dict:
+    """
+    Return {method_label: total_reward} for one participant file.
+    Also returns the layout display name.
+    """
+    # Layout from user_storage in the last record that has it
+    layout_raw = None
+    for r in reversed(records):
+        us = r.get("user_storage", {})
+        if isinstance(us, dict) and "selected_layout" in us:
+            layout_raw = us["selected_layout"]
+            break
+
+    layout = parse_layout(layout_raw) if layout_raw else None
+
+    # Fallback: infer layout from filename or block names
+    if layout is None:
+        candidates = []
+        if source_path is not None:
+            candidates.append(source_path.stem)
+        for r in records:
+            n = r.get("name", "")
+            if isinstance(n, str):
+                candidates.append(n)
+        for cand in candidates:
+            for key, label in LAYOUT_MAP.items():
+                if key in cand:
+                    layout = label
+                    break
+            if layout:
+                break
+
+    # Sum rewards per block name
+    rewards_by_name: dict[str, float] = defaultdict(float)
     for r in records:
         meta = r.get("metadata", {})
         if not isinstance(meta, dict) or meta.get("type") != "EnvStage":
             continue
-        name = r.get("name", "unknown")
+        name = r.get("name", "")
+        if "tutorial" in name:
+            continue
         ts_blob = r.get("data", {}).get("timestep")
         if not isinstance(ts_blob, bytes):
             continue
         try:
-            ts = decode_timestep(ts_blob)
-            blocks[name]["rewards"].append(ts.get("reward", 0.0))
-            if ts.get("step_type", -1) == 2:      # LAST = episode end
-                blocks[name]["episodes"] += 1
+            rewards_by_name[name] += decode_timestep_reward(ts_blob)
         except Exception:
             pass
-    return blocks
+
+    # Map raw names → display labels
+    method_totals: dict[str, float] = {}
+    for name, total in rewards_by_name.items():
+        prefix = parse_method(name)
+        if prefix:
+            label = METHOD_MAP[prefix]
+            method_totals[label] = method_totals.get(label, 0.0) + total
+
+    return layout, method_totals
 
 
-def get_feedback(records):
-    """Return a dict of {survey_name: data_dict} for all FeedbackStage records."""
-    feedback = {}
-    for r in records:
-        meta = r.get("metadata", {})
-        if not isinstance(meta, dict) or meta.get("type") != "FeedbackStage":
-            continue
-        feedback[r.get("name", "")] = r.get("data", {})
-    return feedback
+# ── Aggregation across files ──────────────────────────────────────────────────────
+
+def aggregate_all(data_dir: Path) -> dict:
+    """
+    Walk every .json file in data_dir, parse it, and collect
+    {layout: {method: [reward_per_participant, ...]}} .
+    """
+    layout_method_rewards: dict[str, dict[str, list]] = {
+        layout: {method: [] for method in METHOD_MAP.values()}
+        for layout in LAYOUT_MAP.values()
+    }
+
+    json_files = sorted(data_dir.glob("*.json"))
+    if not json_files:
+        print(f"[WARNING] No .json files found in {data_dir}")
+        return layout_method_rewards
+
+    for path in json_files:
+        print(f"  Reading {path.name} …", end=" ")
+        try:
+            records = load_records(path)
+            layout, method_totals = extract_session(records, source_path=path)
+            if layout is None:
+                print("(no layout found, skipping)")
+                continue
+            if not any(v != 0 for v in method_totals.values()):
+                print(f"(all-zero session, skipping)")
+                continue
+            for method, total in method_totals.items():
+                layout_method_rewards[layout][method].append(total)
+            print(f"layout={layout!r}  methods={list(method_totals)}")
+        except Exception as e:
+            print(f"(error: {e})")
+
+    return layout_method_rewards
 
 
-def match_survey(block_name, feedback):
-    """Find the survey whose name best matches a block name (exact match preferred)."""
-    candidates = []
-    for survey_name, data in feedback.items():
-        method = survey_name.replace(" Counter Circuit Survey", "").strip().replace(" ", "_")
-        if method == block_name:
-            return data   # exact match — return immediately
-        if block_name.startswith(method) or method in block_name:
-            candidates.append((len(method), data))
-    if candidates:
-        # Pick the longest (most specific) match
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return candidates[0][1]
-    return None
+# ── Stats ─────────────────────────────────────────────────────────────────────────
+
+def mean_sem(values: list) -> tuple[float, float]:
+    if not values:
+        return 0.0, 0.0
+    a = np.array(values, dtype=float)
+    if len(a) > 1:
+        return float(a.mean()), float(a.std(ddof=1) / np.sqrt(len(a)))
+    return float(a.mean()), 0.0
 
 
-# ── Display helpers ─────────────────────────────────────────────────────────────
+# ── Plotting ──────────────────────────────────────────────────────────────────────
 
-def clean_bytes(obj, max_bytes=32):
-    """Replace raw bytes with a readable placeholder."""
-    if isinstance(obj, bytes):
-        return f"<bytes len={len(obj)}>" if len(obj) > max_bytes else obj.hex()
-    if isinstance(obj, dict):
-        return {k: clean_bytes(v, max_bytes) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [clean_bytes(i, max_bytes) for i in obj]
-    return obj
+def plot_crossplay(layout_method_rewards: dict, out_path: Path):
+    """
+    Reproduce the "Cross Play Performance" grouped bar chart.
+    Layouts are on the x-axis; one bar group per layout, one bar per method.
+    """
+    # Determine which methods and layouts are actually present
+    all_methods = list(dict.fromkeys(
+        m for lm in layout_method_rewards.values() for m in lm
+        if m in METHOD_COLORS
+    ))
+    # Preserve preferred order: keys of METHOD_MAP values
+    preferred_order = list(METHOD_MAP.values())
+    all_methods = [m for m in preferred_order if m in all_methods] + \
+                  [m for m in all_methods if m not in preferred_order]
 
+    present_layouts = [l for l in LAYOUT_ORDER if l in layout_method_rewards]
+    # If no data at all, fall back to all known layouts for example
+    if not present_layouts:
+        present_layouts = LAYOUT_ORDER
 
-def pretty(obj, indent=2):
-    return json.dumps(clean_bytes(obj), indent=indent, ensure_ascii=False, default=str)
+    n_layouts = len(present_layouts)
+    n_methods = len(all_methods)
 
+    bar_width = 0.18
+    group_gap  = 0.05
+    group_width = n_methods * bar_width + group_gap
+    x_centers  = np.arange(n_layouts) * group_width
 
-def print_results_report(records, path):
-    """Main human-readable report: session info + per-method reward + survey answers."""
-    # ── Session / user info ──────────────────────────────────────────────────
-    user_data = next((r.get("user_data") for r in records if r.get("user_data")), {})
-    uid       = user_data.get("user_id", "?")
-    age       = user_data.get("age", "?")
-    sex       = user_data.get("sex", "?")
+    fig, ax = plt.subplots(figsize=(max(8, n_layouts * 2.0), 5))
 
-    last = records[-1] if records else {}
-    us = last.get("user_storage", {})
-    session_start = us.get("session_start", "?")
-    duration_min  = round(us.get("session_duration", 0.0), 2)
-    finished      = us.get("experiment_finished", False)
-    session_id    = next((r.get("session_id") for r in records if r.get("session_id")), "?")
+    for m_idx, method in enumerate(all_methods):
+        color = METHOD_COLORS.get(method, "#888888")
+        means, sems = [], []
+        for layout in present_layouts:
+            vals = layout_method_rewards.get(layout, {}).get(method, [])
+            m, s = mean_sem(vals)
+            means.append(m)
+            sems.append(s)
 
-    seed = us.get("seed", "?")
+        offsets = x_centers + (m_idx - n_methods / 2 + 0.5) * bar_width
+        bars = ax.bar(
+            offsets, means,
+            width=bar_width,
+            color=color,
+            label=method,
+            zorder=3,
+        )
+        ax.errorbar(
+            offsets, means, yerr=sems,
+            fmt="none",
+            ecolor="black",
+            capsize=3,
+            elinewidth=1.2,
+            zorder=4,
+        )
 
-    # ── Layout: collect unique block desc values (environment descriptions) ──
-    layout_descs = []
-    seen_descs = set()
-    for r in records:
-        meta = r.get("metadata", {})
-        if not isinstance(meta, dict):
-            continue
-        bm = meta.get("block_metadata", {})
-        if isinstance(bm, dict):
-            desc = bm.get("desc", "").strip()
-            if desc and desc not in seen_descs and desc.lower() != "instructions":
-                seen_descs.add(desc)
-                layout_descs.append(desc)
-    layout_str = ", ".join(layout_descs) if layout_descs else "N/A"
+    ax.set_title("Human Experiments", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Layouts", fontsize=11)
+    ax.set_ylabel("Average Reward", fontsize=11)
+    ax.set_xticks(x_centers)
+    ax.set_xticklabels(present_layouts, fontsize=9)
+    ax.set_ylim(bottom=0)
+    ax.legend(title=None, fontsize=9, framealpha=0.85)
+    ax.grid(axis="y", linestyle="--", alpha=0.5, zorder=0)
+    ax.set_axisbelow(True)
 
-    p = Path(path)
-    print(f"\n{'='*68}")
-    print(f"  FILE    : {p.name}  ({p.stat().st_size:,} bytes)")
-    print(f"  USER ID : {uid}  |  age={age}  sex={sex}")
-    print(f"  Session : {session_id}")
-    print(f"  Seed    : {seed}")
-    print(f"  Layout  : {layout_str}")
-    print(f"  Start   : {session_start}")
-    print(f"  Duration: {duration_min} min")
-    print(f"  Records : {len(records)}")
-    print(f"  Done    : {'Yes' if finished else 'No (incomplete)'}")
-    print(f"{'='*68}")
-
-    # ── Tutorial summary ─────────────────────────────────────────────────────
-    blocks   = aggregate_blocks(records)
-    feedback = get_feedback(records)
-
-    tutorial = blocks.pop("tutorial", None)
-    if tutorial:
-        total_r = sum(tutorial["rewards"])
-        print(f"\n  [Tutorial]  reward={total_r:.0f}  steps={len(tutorial['rewards'])}  "
-              f"episodes={tutorial['episodes']}")
-
-    # ── Per-method performance table ─────────────────────────────────────────
-    print(f"\n  {'-'*64}")
-    print(f"  {'METHOD':<35} {'REWARD':>8}  {'STEPS':>6}  {'EPISODES':>8}")
-    print(f"  {'-'*64}")
-
-    method_details = []
-    for block_name, data in blocks.items():
-        total_r = sum(data["rewards"])
-        steps   = len(data["rewards"])
-        eps     = data["episodes"]
-        survey  = match_survey(block_name, feedback)
-        print(f"  {block_name:<35} {total_r:>8.0f}  {steps:>6}  {eps:>8}")
-        method_details.append((block_name, total_r, steps, eps, survey))
-
-    # ── Survey answers per method ────────────────────────────────────────────
-    print(f"\n\n  {'='*64}")
-    print(f"  SURVEY ANSWERS PER METHOD")
-    print(f"  {'='*64}")
-
-    for block_name, total_r, steps, eps, survey in method_details:
-        print(f"\n  +-- {block_name}  (reward={total_r:.0f}, steps={steps}, episodes={eps})")
-        if survey:
-            for q in SURVEY_QUESTIONS:
-                ans = survey.get(q, "N/A")
-                q_short = (q[:60] + "..") if len(q) > 62 else q
-                print(f"  |   {q_short:<62}  ->  {ans}")
-        else:
-            print(f"  |   (no survey recorded for this block)")
-        print(f"  +{'-'*67}")
+    plt.tight_layout()
+    plt.savefig(str(out_path), dpi=150)
+    print(f"\n  Chart saved → {out_path}")
 
 
-def print_summary(records):
-    """Compact one-line-per-record action table."""
-    print(f"\n{'#':<6} {'stage_idx':<12} {'type':<16} {'name':<35} {'action':<12}")
-    print("-" * 82)
-    for i, rec in enumerate(records):
-        stage_idx = rec.get("stage_idx", "")
-        name      = rec.get("name", "")[:34]
-        rec_type  = rec.get("metadata", {}).get("type", "") if isinstance(rec.get("metadata"), dict) else ""
-        data      = rec.get("data", {})
-        action    = data.get("action_name", "") if isinstance(data, dict) else ""
-        print(f"{i:<6} {str(stage_idx):<12} {rec_type:<16} {name:<35} {action:<12}")
+# ── Example data injection ────────────────────────────────────────────────────────
+
+def inject_example_data(layout_method_rewards: dict) -> dict:
+    """
+    When real data is sparse (e.g. only one layout, few participants, zero
+    rewards), overlay plausible synthetic values so the chart is illustrative.
+    Real data is kept wherever it is non-zero.
+
+    Approximate values read from the paper figure:
+        Ours ~153, E3T ~163, FCP ~84, IK ~80  (all layouts similar)
+    """
+    synthetic_base = {
+        "Ours": (153, 4),
+        "E3T":  (163, 3),
+        "FCP":  (84,  3),
+        "IK":   (80,  3),
+    }
+    rng = np.random.default_rng(42)
+    N_FAKE = 5   # fake participants per cell
+
+    for layout in LAYOUT_ORDER:
+        for method, (mu, sigma) in synthetic_base.items():
+            real = layout_method_rewards[layout][method]
+            # Only inject if we have no real non-zero observations
+            if not any(v != 0 for v in real):
+                fake = rng.normal(mu, sigma, N_FAKE).tolist()
+                layout_method_rewards[layout][method] = fake
+
+    return layout_method_rewards
 
 
-def print_record(rec, index):
-    """Pretty-print a single record."""
-    stage_idx  = rec.get("stage_idx", "?")
-    session_id = rec.get("session_id", "?")
-    name       = rec.get("name", "?")
-    rec_type   = rec.get("metadata", {}).get("type", "?") if isinstance(rec.get("metadata"), dict) else "?"
-
-    print(f"\n{'='*70}")
-    print(f"  Record #{index}  |  stage_idx={stage_idx}  |  type={rec_type}  |  name={name}")
-    print(f"  session: {session_id}")
-    print(f"{'='*70}")
-
-    data = rec.get("data", {})
-    if isinstance(data, dict):
-        for key in ("image_seen_time", "action_taken_time", "computer_interaction",
-                    "action_name", "action_idx", "timelimit"):
-            if key in data:
-                print(f"  {key:<26} {data[key]}")
-
-    ud = rec.get("user_data", {})
-    if isinstance(ud, dict):
-        print(f"\n  User: id={ud.get('user_id')}  age={ud.get('age')}  sex={ud.get('sex')}")
-
-    meta = rec.get("metadata", {})
-    if isinstance(meta, dict):
-        bm = meta.get("block_metadata", {})
-        print(f"\n  Block : {bm.get('name', '?')}  desc=\"{bm.get('desc', '')}\"")
-        print(f"  Layout: {bm.get('desc', 'N/A')}")
-        print(f"  nsteps={meta.get('nsteps')}  nepisodes={meta.get('nepisodes')}  nsuccesses={meta.get('nsuccesses')}")
-
-    us = rec.get("user_storage", {})
-    if isinstance(us, dict) and "seed" in us:
-        print(f"  Seed  : {us.get('seed', '?')}")
-
-    if rec_type == "FeedbackStage" and isinstance(data, dict):
-        print("\n  Feedback responses:")
-        skip = {"image_seen_time", "action_taken_time", "computer_interaction",
-                "action_name", "action_idx", "timelimit", "prolific_id"}
-        for q, ans in data.items():
-            if q not in skip and isinstance(ans, str):
-                print(f"    Q: {q}")
-                print(f"    A: {ans}")
-
-    print(f"\n  Full record (bytes truncated):\n")
-    for line in pretty(rec).splitlines():
-        print("    " + line)
-
-
-# ── Main ────────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Display counter_circuit debug files.")
-    parser.add_argument("--file",    type=str, default=None,  help="Path to a specific file")
-    parser.add_argument("--all",     action="store_true",      help="Print every record in full")
-    parser.add_argument("--summary", action="store_true",      help="Print a compact action table")
-    parser.add_argument("--record",  type=int, default=None,   help="Print a single record by index")
+    parser = argparse.ArgumentParser(description="Cross Play Performance chart")
+    parser.add_argument("--dir", type=str, default=".",
+                        help="Directory containing debug .json files (default: current dir)")
+    parser.add_argument("--out", type=str, default="crossplay_performance.png",
+                        help="Output image path (default: crossplay_performance.png)")
     args = parser.parse_args()
 
-    files = [args.file] if args.file else DEFAULT_FILES
+    data_dir = Path(args.dir)
+    out_path = Path(args.out)
 
-    for path in files:
-        p = Path(path)
-        if not p.exists():
-            print(f"\n[SKIP] File not found: {path}")
-            continue
+    print(f"\nScanning {data_dir.resolve()} …\n")
+    layout_method_rewards = aggregate_all(data_dir)
 
-        records = load_records(str(p))
 
-        if args.summary:
-            print(f"\n{'#'*70}\n  {p.name}  ({len(records)} records)\n{'#'*70}")
-            print_summary(records)
-        elif args.all:
-            print(f"\n{'#'*70}\n  {p.name}  ({len(records)} records)\n{'#'*70}")
-            for i, rec in enumerate(records):
-                print_record(rec, i)
-        elif args.record is not None:
-            if args.record < len(records):
-                print_record(records[args.record], args.record)
-            else:
-                print(f"  [ERROR] Record {args.record} out of range (max {len(records)-1})")
-        else:
-            # Default: full results report
-            print_results_report(records, str(p))
+
+    # Summary table
+    print(f"\n  {'LAYOUT':<22} {'METHOD':<12} {'N':>4}  {'MEAN':>8}  {'SEM':>7}")
+    print("  " + "-" * 58)
+    for layout in LAYOUT_ORDER:
+        for method in METHOD_MAP.values():
+            vals = layout_method_rewards.get(layout, {}).get(method, [])
+            m, s = mean_sem(vals)
+            print(f"  {layout:<22} {method:<12} {len(vals):>4}  {m:>8.1f}  {s:>7.2f}")
+
+    plot_crossplay(layout_method_rewards, out_path)
 
 
 if __name__ == "__main__":
