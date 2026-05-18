@@ -1,0 +1,92 @@
+Metadata-Version: 2.4
+Name: jaxmarl
+Version: 0.0.3
+Summary: Multi-Agent Reinforcement Learning with JAX
+Author-email: Foerster Lab for AI Research <arutherford@robots.ox.ac.uk>
+License: MIT License
+        
+        Copyright (c) 2025 Kunal Jha
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Project-URL: Homepage, https://github.com/FLAIROx/JaxMARL
+Project-URL: Bug Tracker, https://github.com/FLAIROx/JaxMARL/issues
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: Apache Software License
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+License-File: LICENSE copy
+Requires-Dist: jax-tqdm==0.2.2
+Requires-Dist: jraph==0.0.6.dev0
+Requires-Dist: flax==0.7.4
+Requires-Dist: chex==0.1.84
+Requires-Dist: optax==0.1.7
+Requires-Dist: dotmap==1.3.30
+Requires-Dist: evosax==0.1.5
+Requires-Dist: distrax==0.1.5
+Requires-Dist: brax==0.10.0
+Requires-Dist: gymnax==0.0.6
+Requires-Dist: safetensors==0.4.2
+Requires-Dist: flashbax==0.1.0
+Requires-Dist: wandb==0.16.2
+Requires-Dist: pytest==8.1.1
+Requires-Dist: pygame==2.5.2
+Requires-Dist: numpy==1.26.4
+Requires-Dist: scipy==1.12.0
+Requires-Dist: hydra-core==1.3.2
+Requires-Dist: omegaconf==2.3.0
+Requires-Dist: matplotlib==3.8.4
+Requires-Dist: pillow==10.3.0
+Requires-Dist: pettingzoo==1.24.3
+Requires-Dist: tqdm==4.66.1
+Requires-Dist: imageio==2.36.1
+Requires-Dist: seaborn==0.13.2
+Dynamic: license-file
+
+# Cross-Environment Cooperation Enables Zero-shot Multi-agent Coordination
+Repository with environment and training scripts for paper *Cross-Environment Cooperation Enables Zero-shot Multi-agent Coordination* (Jha et. al, 2025)
+
+Environment Code and Scripts based on [JaxMARL](https://github.com/FLAIROx/JaxMARL) repository.
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+All scripts are in the `baselines/CEC/` directory.
+Customize the config file in `baselines/CEC/config/ippo_final.yaml` and run the following command to get started.
+
+```bash
+python baselines/CEC/ippo_general.py
+```
+
+## Environment Code
+
+The Dual Destination and Overcooked procedurally generated environments can be found in the `jaxmarl/environments/` directory under the `ToyCoop` and `overcooked` subdirectories respectively.
