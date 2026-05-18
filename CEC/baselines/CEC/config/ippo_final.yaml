@@ -1,0 +1,65 @@
+"ENV_NAME": "overcooked"  # ToyCoop or overcooked
+"LR": 3e-4
+"NUM_ENVS": 100 # 100(fcp) 16(e3t) #512 (ik), ik (finetune):100
+"NUM_SEEDS": 1
+"NUM_STEPS": 400 # 100 (ik) #400 (e3t and my)
+"MOE": "1"
+"ACHIEVER": "standrard" #"standrard" #"LR" # "standrard"  
+"FC_DIM_SIZE": 128
+"MY_GRU_HIDDEN_DIM": 120
+"GRU_HIDDEN_DIM": 128
+# "TOTAL_TIMESTEPS"(ik): 20e8 # 20e8 (coord ring)  # 12e8 (creamped room), fintune: all 4e8
+"TOTAL_TIMESTEPS": 4e8 # fcp phase1:1e8 2e7 1e7 # 1e8 (ik) #135e6 (e3t and my)
+"MAX_TRAIN_STEPS": 4e9 # fcp phase1:3e9 2e9 1e9 # 3e9 (ik) #135e6 (e3t and my)
+#"MAX_TRAIN_STEPS" (ik): 15e9 # 15e9 (coord ring) # 3e9  (creamed room), finetune: all 4e9
+"UPDATE_EPOCHS": 4
+"NUM_MINIBATCHES": 2
+"GAMMA": 0.99
+"GAE_LAMBDA": 0.95
+"CLIP_EPS": 0.2
+"SCALE_CLIP_EPS": False
+"ENT_COEF": 0.005
+"VF_COEF": 1.0
+"MOA_COEF": 1.0
+"MAX_GRAD_NORM": 0.5
+"ACTIVATION": "relu"
+"ANNEAL_LR": True
+"SEED": 0
+"MY_LAYOUT" : "counter_circuit"
+"ENV_KWARGS": 
+  "random_reset" : False # relevant for which env to train/test on. If true, it is CEC, otherwise single task
+  "max_steps": 400 # 100 (ik) #400 (e3t and my)
+  "check_held_out": False  # if false, we don't check if the reset env is held out
+  # toy specific kwargs
+  "debug": False
+  "partial_obs": False
+  "incentivize_strat": 2 # choose [0, 1, 2, 3] for top, bottom, none, or multiple
+  # overcooked specific kwargs
+  "shuffle_inv_and_pot": False # if true, we shuffle pot status and inventory
+  "layout": "counter_circuit_9"  # relevant for overcooked, all CEC compatible envs have the "_9" in the name at the end
+  "random_reset_fn": "reset_all"  # reset_all or reset_counter_circuit
+"TRAINING": True
+"TRAIN_KWARGS":
+  "ckpt_id": 0 # loads from ckpt_id - 1 if available
+  "overwrite_ckpt": True # True # if true, will overwrite ckpt_id
+  "finetune": False # if true, load from opposing paradigm and cut learning rate by 10x
+  "e3t_beta": 0.55  # how much randomness to add to probabilities of one partner. If 0 then it's completely uniform, if 1 then it's same as original, if higher than 1 we're magnifying the extremes
+"TEST_KWARGS":
+  "beta": 1.0
+  "argmax": False  # otherwise we sample from policy
+  "num_trajs": 40
+  "plot": True  # if true, will get precedence over saving data
+  "self_play": True  # get's full cross play matrix
+  "ik": False # relevant to which model to load (ik vs sk)
+  "debug": False
+  "use_ckpt": True  # if true, will load from ckpt_id, otherwise will load from latest
+"GRAPH_NET": False
+"LSTM": True
+"FCP": False
+"FCP_KWARGS":
+  "train_oracle": False
+# WandB Params
+"ENTITY": "social-rl"                                          
+"PROJECT": ""
+"WANDB_MODE" : "disabled"
+
