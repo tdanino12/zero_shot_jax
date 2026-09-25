@@ -156,15 +156,16 @@ ax.set_axisbelow(True)
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 
-# Headroom for the legend at the top
+# Headroom for the legend at the top (extra room since the legend is larger)
 ymax = (means_grid + sems_grid).max()
-ax.set_ylim(0, ymax * 1.18)
+ax.set_ylim(0, ymax * 1.25)
 
-# Legend in a single row
+# Legend in a single row — larger text and larger handles
 ax.legend(
-    ncol=n_methods, fontsize=11, frameon=False,
+    ncol=n_methods, fontsize=16, frameon=False,
     loc="upper center", bbox_to_anchor=(0.5, 1.0),
-    handlelength=1.4, columnspacing=1.2,
+    handlelength=1.6, handleheight=1.2,
+    columnspacing=1.3, handletextpad=0.5,
 )
 
 plt.tight_layout()
