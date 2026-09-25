@@ -1,17 +1,17 @@
 """
-Build the full paper figure in one go:
+Build the paper figure (two panels, like Fig. 3 in the paper):
   Step 1: Render the bar chart of average cross-play reward across the
           5 Overcooked layouts.
-  Step 2: Combine the bar chart with the heatmap and the layouts strip into
-          a styled three-panel figure (panel labels, frames, captions).
+  Step 2: Combine the bar chart with the heatmap into a styled two-panel
+          figure (panel labels, frames, captions) — panel (a) bar chart,
+          panel (b) heatmap. No layouts strip / panel (c).
 
-Inputs (all PDFs):
+Inputs (PDF):
   HEATMAP_PDF  : pre-made heatmap of behavioural metrics by player type
-  LAYOUTS_PDF  : pre-made strip showing the 5 Overcooked layouts
 
 Output:
   - bar chart PDF (intermediate, kept alongside the final figure)
-  - combined three-panel PDF (the publication figure)
+  - combined two-panel PDF (the publication figure)
 """
 
 import os
@@ -25,92 +25,87 @@ from pypdf import PdfReader, PdfWriter, Transformation, PageObject
 # Paths
 # ===========================================================================
 HEATMAP_PDF  = "/mnt/user-data/uploads/average_all_layouts__2_.pdf"
-LAYOUTS_PDF  = "/mnt/user-data/uploads/Reduction__19_.pdf"
 
 OUTPUT_DIR   = "/mnt/user-data/outputs"
 BAR_PDF      = os.path.join(OUTPUT_DIR, "overcooked_xp_reward.pdf")
-OUTPUT       = os.path.join(OUTPUT_DIR, "combined_three_panel.pdf")
+OUTPUT       = os.path.join(OUTPUT_DIR, "combined_two_panel.pdf")
 
-CAPTION_PDF  = "/tmp/_caption.pdf"
 DECOR_PDF    = "/tmp/_decor.pdf"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # ===========================================================================
-# STEP 1 — Build the average bar chart (across 5 layouts)
+# STEP 1 — Build the bar chart
 # ===========================================================================
 
-# Raw per-layout (mean, std across 10 seeds)
+# Raw per-layout (mean, SEM across 20 training seeds) — from the updated
+# results table (Table: "Cross-play (XP) reward per Overcooked layout")
 data = {
-    "forced_coord": {
-        "my":          (54.05786,  26.348522),
-        "e3t":         (26.221786, 10.168269),
-        "fcp":         (37.48107,  24.772738),
-        "ik":          (7.0871434,  2.784751),
-        "mep":         (47.52786,  40.212982),
-        "ik_finetune": (26.924646,  8.547634),
-        "hsp":         (41.618217, 22.847237),
-    },
     "cramped_room": {
-        "my":          (192.95691,  34.50269),
-        "e3t":         (155.81189,  28.962366),
-        "fcp":         (180.54393,  48.186893),
-        "ik":          (153.1656,   14.494744),
-        "mep":         (153.1218,   46.607937),
-        "ik_finetune": (144.80215,  22.782776),
-        "hsp":         (191.73752,  23.766764),
+        "my":  (195.1,  7.1),
+        "e3t": (159.9,  7.2),
+        "fcp": (181.1, 12.3),
+        "mep": (155.2, 11.7),
+        "hsp": (190.7,  5.5),
+        "cec": (149.8,  6.2),
     },
     "coord_ring": {
-        "my":          (197.16145,  40.60414),
-        "e3t":         (94.97321,   37.318813),
-        "fcp":         (140.83572,  85.48993),
-        "ik":          (115.24965,  42.42527),
-        "mep":         (143.44286,  34.729904),
-        "ik_finetune": (134.49358,  61.220802),
-        "hsp":         (192.46216,  27.514336),
+        "my":  (197.9,  9.9),
+        "e3t": (97.0,  10.7),
+        "fcp": (141.8, 22.1),
+        "mep": (142.3,  9.0),
+        "hsp": (191.1,  6.1),
+        "cec": (135.4, 15.5),
     },
     "assym": {
-        "my":          (277.2443,    92.02341),
-        "e3t":         (122.06858,   37.042847),
-        "fcp":         (113.8418,   107.75341),
-        "ik":          (73.32643,    50.010845),
-        "mep":         (213.65286,  113.60678),
-        "ik_finetune": (131.17679,   72.16775),
-        "hsp":         (217.7043,    59.227245),
+        "my":  (283.2, 24.1),
+        "e3t": (123.2,  9.7),
+        "fcp": (123.9, 30.0),
+        "mep": (215.7, 30.8),
+        "hsp": (219.1, 15.7),
+        "cec": (137.3, 20.0),
     },
     "counter_circuit": {
-        "my":          (125.89001,  32.839577),
-        "e3t":         (49.797504,  33.243916),
-        "fcp":         (66.91393,   67.8655),
-        "ik":          (21.076786,  24.141754),
-        "mep":         (91.35643,   62.64699),
-        "ik_finetune": (22.616787,  21.221844),
-        "hsp":         (118.42857,  43.236946),
+        "my":  (126.1,  7.8),
+        "e3t": (51.8,   9.1),
+        "fcp": (69.9,  18.54),
+        "mep": (95.4,  15.8),
+        "hsp": (118.0,  9.3),
+        "cec": (26.6,   5.3),
+    },
+    "forced_coord": {
+        "my":  (55.1,   6.9),
+        "e3t": (27.2,   3.1),
+        "fcp": (36.6,   7.0),
+        "mep": (47.0,   9.1),
+        "hsp": (42.7,   6.2),
+        "cec": (27.8,   2.9),
     },
 }
 
-# Display names (skip "ik")
+# Display names
 RENAME = {
-    "my":          "TEAM (ours)",
-    "e3t":         "E3T",
-    "fcp":         "FCP",
-    "mep":         "MEP",
-    "hsp":         "HSP",
-    "ik_finetune": "CEC",
+    "my":  "TEAM (ours)",
+    "e3t": "E3T",
+    "fcp": "FCP",
+    "mep": "MEP",
+    "hsp": "HSP",
+    "cec": "CEC",
 }
 DISPLAY_ORDER = ["TEAM (ours)", "E3T", "FCP", "MEP", "HSP", "CEC"]
 
-# Aggregate across the 5 layouts
+# Aggregate (average) across the 5 layouts.
+# Table row values are already mean +/- SEM across the 20 training seeds,
+# so we average the per-layout means and average the per-layout SEMs
+# (matching the table's reported "Average" row, e.g. TEAM = 171.48).
 layouts = list(data.keys())
 agg_mean, agg_sem = {}, {}
 for raw_name, display_name in RENAME.items():
     per_layout_means = np.array([data[L][raw_name][0] for L in layouts])
-    per_layout_stds  = np.array([data[L][raw_name][1] for L in layouts])
+    per_layout_sems  = np.array([data[L][raw_name][1] for L in layouts])
     agg_mean[display_name] = per_layout_means.mean()
-    # Each layout's std is across 10 seeds → SEM = std / sqrt(10);
-    # average those SEMs across the 5 layouts.
-    agg_sem[display_name]  = (per_layout_stds / np.sqrt(10.0)).mean()
+    agg_sem[display_name]  = per_layout_sems.mean()
 
 means = [agg_mean[n] for n in DISPLAY_ORDER]
 sems  = [agg_sem[n]  for n in DISPLAY_ORDER]
@@ -164,38 +159,27 @@ print(f"\nBar chart saved to: {BAR_PDF}\n")
 
 
 # ===========================================================================
-# STEP 2 — Build the styled three-panel figure
+# STEP 2 — Build the styled two-panel figure (a: bar chart, b: heatmap)
 # ===========================================================================
-
-CAPTION_TEXT = "Five Overcooked layouts used for evaluation"
 
 HEADERS = {
     "a": "Cross-play (XP) and cross-seed results",
     "b": "Behavioural metrics by player type",
-    "c": "Layouts",
 }
 
 # Layout parameters (PDF points; 72 pt = 1 inch)
-COL_WIDTH        = 500   # left column inner width (panel A and C share it)
-PADDING_BETWEEN  = 24    # horizontal gap between left column and right panel
-ROW_GAP          = 18    # vertical gap between panel A and panel C
-CAPTION_GAP      = 6     # gap between layouts strip and caption
+PANEL_WIDTH      = 500   # shared width for panel A and panel B (50/50 split)
+PADDING_BETWEEN  = 24    # horizontal gap between panel A and panel B
 MARGIN           = 26    # outer page margin
 
 PANEL_PAD_X      = 16    # horizontal padding inside a panel
-STRIP_PAD_X      = 12    # padding around the layouts strip (left/right gap)
-STRIP_PAD_TOP    = 8     # gap from rule to the strip (panel C only)
-STRIP_PAD_BOTTOM = 10    # gap from strip to caption (panel C only)
 PANEL_PAD_TOP    = 12
 PANEL_PAD_BOTTOM = 14
 HEADER_TO_RULE   = 6
 RULE_TO_CONTENT  = 12
 
-STRIP_BG_COLOR   = "#f1f3f4"   # light gray background behind the layouts strip
-
 LABEL_FONTSIZE     = 19
 SUBTITLE_FONTSIZE  = 15
-CAPTION_FONTSIZE   = 14
 
 BORDER_LW_PT     = 0.9
 BORDER_COLOR     = "#9aa0a6"
@@ -206,82 +190,43 @@ CORNER_RADIUS    = 6.0
 # --- read source pages
 bar_page     = PdfReader(BAR_PDF).pages[0]
 heatmap_page = PdfReader(HEATMAP_PDF).pages[0]
-layouts_page = PdfReader(LAYOUTS_PDF).pages[0]
 
 def wh(p):
     return float(p.mediabox.width), float(p.mediabox.height)
 
-bar_w_src,     bar_h_src     = wh(bar_page)
-heat_w_src,    heat_h_src    = wh(heatmap_page)
-layouts_w_src, layouts_h_src = wh(layouts_page)
+bar_w_src,  bar_h_src  = wh(bar_page)
+heat_w_src, heat_h_src = wh(heatmap_page)
 
-bar_aspect     = bar_w_src / bar_h_src
-layouts_aspect = layouts_w_src / layouts_h_src
-heat_aspect    = heat_w_src / heat_h_src
-
-# --- render caption
-fig, ax = plt.subplots(figsize=(6, 0.4))
-ax.axis("off")
-ax.text(0.5, 0.5, CAPTION_TEXT, ha="center", va="center",
-        fontsize=CAPTION_FONTSIZE, family="DejaVu Sans",
-        color="#3c4043", style="italic")
-with PdfPages(CAPTION_PDF) as pdf:
-    pdf.savefig(fig, bbox_inches="tight", pad_inches=0.04)
-plt.close(fig)
-caption_page = PdfReader(CAPTION_PDF).pages[0]
-cap_w_src, cap_h_src = wh(caption_page)
-caption_natural_aspect = cap_w_src / cap_h_src
+bar_aspect  = bar_w_src / bar_h_src
+heat_aspect = heat_w_src / heat_h_src
 
 # --- geometry
-inner_w = COL_WIDTH - 2 * PANEL_PAD_X
+inner_w = PANEL_WIDTH - 2 * PANEL_PAD_X
 header_h = LABEL_FONTSIZE + HEADER_TO_RULE + 1 + RULE_TO_CONTENT
 
-# Panel A: bar chart fills the inner width at its natural aspect
+# Both panels share the same width (50/50 split); each wraps its content
+# to that width, and the row height is set by whichever panel is taller.
 bar_width  = inner_w
 bar_height = bar_width / bar_aspect
-panel_a_h  = PANEL_PAD_TOP + header_h + bar_height + PANEL_PAD_BOTTOM
-panel_a_w  = COL_WIDTH
 
-# Panel C: layouts strip + caption.
-# The strip at its natural aspect (~6.83:1) is too short relative to the
-# panel. We allow a controlled vertical stretch (Y_STRETCH) to make the
-# kitchens visibly taller without changing the column width or distorting
-# them too much.
-Y_STRETCH = 1.85  # 1.0 = natural aspect; >1 = taller kitchens
+heat_width  = inner_w
+heat_height = heat_width / heat_aspect
 
-strip_inner_w  = COL_WIDTH - 2 * STRIP_PAD_X
-layouts_w      = strip_inner_w
-layouts_natural_h = layouts_w / layouts_aspect
-layouts_strip_h   = layouts_natural_h * Y_STRETCH
+content_h  = max(bar_height, heat_height)
+row_height = PANEL_PAD_TOP + header_h + content_h + PANEL_PAD_BOTTOM
 
-caption_w = inner_w
-caption_h = caption_w / caption_natural_aspect
-panel_c_content_h = layouts_strip_h + CAPTION_GAP + caption_h
-panel_c_h = (PANEL_PAD_TOP + LABEL_FONTSIZE + HEADER_TO_RULE + 1
-             + STRIP_PAD_TOP + panel_c_content_h + STRIP_PAD_BOTTOM)
-panel_c_w = COL_WIDTH
+panel_a_w, panel_a_h = PANEL_WIDTH, row_height
+panel_b_w, panel_b_h = PANEL_WIDTH, row_height
 
-left_col_height = panel_a_h + ROW_GAP + panel_c_h
-
-# Panel B: heatmap fills full left column height
-heat_height = left_col_height - PANEL_PAD_TOP - header_h - PANEL_PAD_BOTTOM
-heat_width  = heat_height * heat_aspect
-panel_b_w   = heat_width + 2 * PANEL_PAD_X
-panel_b_h   = left_col_height
-
-bar_scale       = bar_width  / bar_w_src
-layouts_scale_x = layouts_w  / layouts_w_src
-layouts_scale_y = layouts_strip_h / layouts_h_src
-caption_scale   = inner_w    / cap_w_src
-heat_scale      = heat_height / heat_h_src
+bar_scale  = bar_width   / bar_w_src
+heat_scale = heat_height / heat_h_src
 
 page_w = MARGIN + panel_a_w + PADDING_BETWEEN + panel_b_w + MARGIN
-page_h = MARGIN + left_col_height + MARGIN
+page_h = MARGIN + row_height + MARGIN
 
 left_x  = MARGIN
 right_x = MARGIN + panel_a_w + PADDING_BETWEEN
-panel_c = (left_x, MARGIN, panel_c_w, panel_c_h)
-panel_a = (left_x, MARGIN + panel_c_h + ROW_GAP, panel_a_w, panel_a_h)
+panel_a = (left_x,  MARGIN, panel_a_w, panel_a_h)
 panel_b = (right_x, MARGIN, panel_b_w, panel_b_h)
 
 # --- decoration (frames + headers + rules)
@@ -319,27 +264,6 @@ def draw_panel(rect, letter, subtitle):
 
 draw_panel(panel_a, "a", HEADERS["a"])
 draw_panel(panel_b, "b", HEADERS["b"])
-draw_panel(panel_c, "c", HEADERS["c"])
-
-# Light gray background framing the layouts strip — extends beyond the
-# strip in all directions so it's visible as a frame.
-panel_c_x_dec, panel_c_y_dec, _, panel_c_h_dec = panel_c
-rule_y_c_dec = (panel_c_y_dec + panel_c_h_dec - PANEL_PAD_TOP) - LABEL_FONTSIZE - HEADER_TO_RULE
-strip_top_y_dec = rule_y_c_dec - STRIP_PAD_TOP
-
-# Inset the strip slightly so the gray bg shows around it (8pt frame)
-STRIP_BG_FRAME = 8
-bg_x = panel_c_x_dec + STRIP_PAD_X - STRIP_BG_FRAME
-bg_y = strip_top_y_dec - layouts_strip_h - STRIP_BG_FRAME
-bg_w = panel_c_w - 2 * STRIP_PAD_X + 2 * STRIP_BG_FRAME
-bg_h = layouts_strip_h + 2 * STRIP_BG_FRAME
-strip_bg = patches.FancyBboxPatch(
-    (bg_x, bg_y), bg_w, bg_h,
-    boxstyle=f"round,pad=0,rounding_size=4.0",
-    linewidth=0,
-    facecolor=STRIP_BG_COLOR,
-)
-ax.add_patch(strip_bg)
 
 fig.savefig(DECOR_PDF, format="pdf", bbox_inches=None, pad_inches=0)
 plt.close(fig)
@@ -357,32 +281,19 @@ def content_origin(rect):
     rule_y = (y + h - PANEL_PAD_TOP) - LABEL_FONTSIZE - HEADER_TO_RULE
     return x + PANEL_PAD_X, rule_y - RULE_TO_CONTENT
 
-# Panel A: bar chart (fills inner width)
+# Panel A: bar chart (vertically centered in the content area)
 ax_x, ax_top = content_origin(panel_a)
+a_slack = content_h - bar_height
 new_page.merge_transformed_page(
     bar_page,
-    Transformation().scale(bar_scale).translate(ax_x, ax_top - bar_height))
+    Transformation().scale(bar_scale).translate(ax_x, ax_top - a_slack / 2 - bar_height))
 
-# Panel C: layouts strip (stretched vertically) + caption
-panel_c_x, panel_c_y, _, panel_c_h_used = panel_c
-rule_y_c = (panel_c_y + panel_c_h_used - PANEL_PAD_TOP) - LABEL_FONTSIZE - HEADER_TO_RULE
-strip_top_y = rule_y_c - STRIP_PAD_TOP
-strip_x = panel_c_x + STRIP_PAD_X
-layouts_y = strip_top_y - layouts_strip_h
-new_page.merge_transformed_page(
-    layouts_page,
-    Transformation().scale(layouts_scale_x, layouts_scale_y).translate(strip_x, layouts_y))
-caption_x = panel_c_x + PANEL_PAD_X
-caption_y = layouts_y - CAPTION_GAP - caption_h
-new_page.merge_transformed_page(
-    caption_page,
-    Transformation().scale(caption_scale).translate(caption_x, caption_y))
-
-# Panel B: heatmap
+# Panel B: heatmap (vertically centered in the content area)
 bx_x, bx_top = content_origin(panel_b)
+b_slack = content_h - heat_height
 new_page.merge_transformed_page(
     heatmap_page,
-    Transformation().scale(heat_scale).translate(bx_x, bx_top - heat_height))
+    Transformation().scale(heat_scale).translate(bx_x, bx_top - b_slack / 2 - heat_height))
 
 # --- write
 writer = PdfWriter()
